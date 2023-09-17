@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"github.com/go-chi/jwtauth/v5"
+	"gorm.io/gorm"
 	"log"
 	"net/http"
 )
@@ -29,6 +30,13 @@ func registerHandler(w http.ResponseWriter, r *http.Request) {
 	user := User{Username: username, Password: encryptedPassword}
 
 	// DB Create
+	db, ok := r.Context().Value("DB").(*gorm.DB)
+	if !ok {
+		log.Println("Error: DB not found in context")
+		// Send error back to client
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
 	err := db.Create(&user).Error
 	if err != nil {
 		log.Println("Error: ", err)
@@ -58,6 +66,13 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Find user by username
 	user := User{}
+	db, ok := r.Context().Value("DB").(*gorm.DB)
+	if !ok {
+		log.Println("Error: DB not found in context")
+		// Send error back to client
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
 	err := db.Where("username = ?", username).First(&user).Error
 	if err != nil {
 		log.Println("Error: ", err)
@@ -66,7 +81,6 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.Println("User: ", user)
 	// Print UserId and Username
 	log.Printf("User ID: %d and Username: %s\n", user.ID, user.Username)
 
@@ -99,10 +113,17 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Send success back to client with jwt token
-	_, err = w.Write([]byte(token))
+	w.Header().Set("Content-Type", "application/json")
+	_, err = w.Write([]byte(`{"token": "` + token + `"}`))
+	if err != nil {
+		log.Println("Error: ", err)
+		// Send error back to client
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
 }
 
-func homeHandler(w http.ResponseWriter, r *http.Request) {
+func homeHandler(w http.ResponseWriter, _ *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	_, err := w.Write([]byte("Home Anonymous"))
 	if err != nil {
@@ -113,8 +134,24 @@ func homeHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func protectedHandler(w http.ResponseWriter, r *http.Request) {
+	// Get the username from the jwt token
+
 	_, claims, err := jwtauth.FromContext(r.Context())
-	_, err = w.Write([]byte(fmt.Sprintf("protected area. hi %v", claims["user_id"])))
+	if err != nil {
+		log.Println("Error: ", err)
+		// Send error back to client
+		w.WriteHeader(http.StatusInternalServerError)
+	}
+
+	username, ok := claims["sub"].(string)
+	if !ok {
+		// Handle the case where "sub" is not a string (unexpected)
+		log.Println("Error: Subject claim is not a string")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	_, err = w.Write([]byte(fmt.Sprintf("This is a protected area. Hi %v", username)))
 	if err != nil {
 		log.Println("Error: ", err)
 		// Send error back to client
@@ -122,7 +159,7 @@ func protectedHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func notFoundHandler(w http.ResponseWriter, r *http.Request) {
+func notFoundHandler(w http.ResponseWriter, _ *http.Request) {
 	w.WriteHeader(http.StatusNotFound)
 	_, err := w.Write([]byte("Not Found, Implement me!"))
 	if err != nil {

@@ -85,6 +85,8 @@ func run() {
 	router.Use(middleware.CleanPath)
 	// Using middleware for Charset
 	router.Use(middleware.SetHeader("Content-Type", "application/json; charset=utf-8"))
+	// Using middleware for DB context
+	router.Use(SetDBMiddleware)
 
 	// Routes:
 	// Home

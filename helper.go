@@ -1,11 +1,13 @@
 package main
 
 import (
+	"context"
 	"crypto/aes"
 	"crypto/cipher"
 	"encoding/base64"
 	"github.com/golang-jwt/jwt/v5"
 	"log"
+	"net/http"
 	"time"
 )
 
@@ -54,16 +56,25 @@ func decryptPassword(encodedCiphertext string) string {
 
 // createToken function to create a jwt token
 func createToken(username string) (string, error) {
-	claims := jwt.MapClaims{
-		"username": username,
-		"exp":      time.Now().Add(time.Hour * 24).Unix(),
-	}
-
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	secretKeyBytes := []byte(SecretKey)
-	tokenString, err := token.SignedString(secretKeyBytes)
+	// If authentication is successful, generate a JWT token
+	token := jwt.New(jwt.SigningMethodHS256)
+	claims := token.Claims.(jwt.MapClaims)
+	claims["sub"] = username
+	claims["exp"] = time.Now().Add(time.Hour * 24).Unix()
+	tokenString, err := token.SignedString([]byte(SecretKey))
 	if err != nil {
+		log.Println("Error: ", err)
 		return "", err
 	}
+	log.Println("Token: ", tokenString)
 	return tokenString, nil
+}
+
+// SetDBMiddleware function to set the database middleware
+func SetDBMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		timeoutContext, _ := context.WithTimeout(context.Background(), time.Second)
+		ctx := context.WithValue(r.Context(), "DB", db.WithContext(timeoutContext))
+		next.ServeHTTP(w, r.WithContext(ctx))
+	})
 }
