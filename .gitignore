@@ -1,0 +1,4 @@
+testHttp/*
+*.sqlite
+*.db
+bin/*
