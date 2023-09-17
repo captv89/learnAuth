@@ -2,3 +2,4 @@ testHttp/*
 *.sqlite
 *.db
 bin/*
+.idea/*
