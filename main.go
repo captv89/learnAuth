@@ -1,6 +1,8 @@
 package main
 
 import (
+	"context"
+	"errors"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/jwtauth/v5"
@@ -8,6 +10,9 @@ import (
 	"gorm.io/gorm"
 	"log"
 	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
 	"time"
 )
 
@@ -52,17 +57,72 @@ func initDB() {
 	}
 	log.Println("Database connected")
 
-	// Migrate the schema
+	// Migrate:
+	// Migrate the user schema
 	err = db.AutoMigrate(&User{})
 	if err != nil {
 		log.Panicln("Error: ", err)
 	}
-	log.Println("Database migrated")
+	log.Println("Migrated User schema")
+
+	// Migrate the session schema
+	err = db.AutoMigrate(&Session{})
+	if err != nil {
+		log.Panicln("Error: ", err)
+	}
+	log.Println("Migrated Session schema")
+
+	log.Println("Migrations completed")
 
 }
 
 // Run function
 func run() {
+	//Server:
+	server := &http.Server{Addr: ":8080", Handler: apiServer()}
+
+	// Server run context
+	serverCtx, serverStopCtx := context.WithCancel(context.Background())
+
+	// Listen for sys call to process interrupt/quit
+	sig := make(chan os.Signal, 1)
+	signal.Notify(sig, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
+	go func() {
+		s := <-sig
+		log.Println("Got Signal:", s)
+
+		// Shutdown signal with grace period of 30 seconds
+		shutdownCtx, _ := context.WithTimeout(serverCtx, 30*time.Second)
+
+		go func() {
+			<-shutdownCtx.Done()
+			if errors.Is(shutdownCtx.Err(), context.DeadlineExceeded) {
+				log.Fatal("graceful shutdown timed out.. forcing exit.")
+			}
+		}()
+
+		// Trigger graceful shutdown
+		err := server.Shutdown(shutdownCtx)
+		if err != nil {
+			log.Fatal(err)
+		}
+		serverStopCtx()
+	}()
+
+	// Start Server: Listen on port 8080
+	log.Println("Server starting on port 8080..")
+	err := server.ListenAndServe()
+	if err != nil && !errors.Is(err, http.ErrServerClosed) {
+		log.Fatal("Error: ", err)
+	}
+
+	// Stop server
+	// Wait for server context to be stopped
+	<-serverCtx.Done()
+}
+
+// apiServer function returns a http.handler
+func apiServer() http.Handler {
 	//	Using mux router for routing register url path and handler
 	router := chi.NewRouter()
 
@@ -98,21 +158,18 @@ func run() {
 	// Login
 	router.Post("/login", loginHandler)
 
-	// Protected routes:
+	// JWT Protected routes:
 	router.Group(func(r chi.Router) {
 		r.Use(jwtauth.Verifier(tokenAuth))
 		r.Use(jwtauth.Authenticator)
-		r.Get("/protected", protectedHandler)
+		r.Get("/jwt", protectedHandler)
 	})
 
-	//Server:
-	// Start Server: Listen on port 8080
-	log.Println("Server starting on port 8080..")
-	err := http.ListenAndServe(":8080", router)
-	if err != nil {
-		log.Fatal("Error: ", err)
-	}
+	// Session Protected routes:
+	router.Group(func(r chi.Router) {
+		r.Use(SetSessionMiddleware)
+		r.Get("/session", protectedSessionHandler)
+	})
 
-	// Stop server
-	log.Println("Server stopped")
+	return router
 }

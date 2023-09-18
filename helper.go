@@ -1,13 +1,11 @@
 package main
 
 import (
-	"context"
 	"crypto/aes"
 	"crypto/cipher"
 	"encoding/base64"
 	"github.com/golang-jwt/jwt/v5"
 	"log"
-	"net/http"
 	"time"
 )
 
@@ -50,7 +48,7 @@ func decryptPassword(encodedCiphertext string) string {
 	cfb.XORKeyStream(decodedCiphertext, decodedCiphertext)
 
 	password := string(decodedCiphertext)
-	log.Println("Password: ", password)
+	//log.Println("Password: ", password)
 	return password
 }
 
@@ -66,15 +64,6 @@ func createToken(username string) (string, error) {
 		log.Println("Error: ", err)
 		return "", err
 	}
-	log.Println("Token: ", tokenString)
+	//log.Println("Token: ", tokenString)
 	return tokenString, nil
-}
-
-// SetDBMiddleware function to set the database middleware
-func SetDBMiddleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		timeoutContext, _ := context.WithTimeout(context.Background(), time.Second)
-		ctx := context.WithValue(r.Context(), "DB", db.WithContext(timeoutContext))
-		next.ServeHTTP(w, r.WithContext(ctx))
-	})
 }
