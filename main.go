@@ -106,6 +106,18 @@ func run() {
 		if err != nil {
 			log.Fatal(err)
 		}
+		log.Println("Server shutdown gracefully")
+
+		// Close the database connection gracefully
+		if db != nil {
+			dbConn, err := db.DB()
+			if err != nil {
+				log.Println("Error: ", err)
+			}
+			err = dbConn.Close()
+			log.Println("Database connection closed.")
+		}
+
 		serverStopCtx()
 	}()
 
