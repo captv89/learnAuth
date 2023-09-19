@@ -40,6 +40,24 @@ func registerHandler(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
+
+	//Check if username already exists
+	var count int64
+	db.Model(&User{}).Where("username = ?", username).Count(&count)
+	if count > 0 {
+		log.Println("Error: Username already exists")
+		// Send error back to client
+		w.WriteHeader(http.StatusBadRequest)
+		_, err := w.Write([]byte(`{"message": "Username already exists"}`))
+		if err != nil {
+			log.Println("Error: ", err)
+			// Send error back to client
+			w.WriteHeader(http.StatusInternalServerError)
+		}
+		return
+	}
+
+	// Create user
 	err := db.Create(&user).Error
 	if err != nil {
 		log.Println("Error: ", err)
@@ -79,8 +97,8 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 	err := db.Where("username = ?", username).First(&user).Error
 	if err != nil {
 		log.Println("Error: ", err)
-		// Send error back to client
-		w.WriteHeader(http.StatusInternalServerError)
+		// User not found
+		w.WriteHeader(http.StatusUnauthorized)
 		return
 	}
 
