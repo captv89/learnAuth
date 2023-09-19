@@ -145,6 +145,41 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// POST /logout
+func logoutHandler(w http.ResponseWriter, r *http.Request) {
+	// Get the session from the context
+	session, ok := r.Context().Value("session").(*Session)
+	if !ok {
+		log.Println("Error: Session not found in context")
+		// Send error back to client
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	//Session ID
+	sessionID := session.SessionID
+
+	// Delete session from the database
+	db, ok := r.Context().Value("DB").(*gorm.DB)
+	if !ok {
+		log.Println("Error: DB not found in context")
+		// Send error back to client
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	err := db.Where("session_id = ?", sessionID).Delete(&Session{}).Error
+	if err != nil {
+		log.Println("Error: ", err)
+		// Send error back to client
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	// Send success back to client
+	w.WriteHeader(http.StatusOK)
+}
+
 func homeHandler(w http.ResponseWriter, _ *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	_, err := w.Write([]byte("Home Anonymous"))

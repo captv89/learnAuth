@@ -172,15 +172,21 @@ func apiServer() http.Handler {
 
 	// JWT Protected routes:
 	router.Group(func(r chi.Router) {
+		// JWT middleware
 		r.Use(jwtauth.Verifier(tokenAuth))
 		r.Use(jwtauth.Authenticator)
+		// JWT
 		r.Get("/jwt", protectedHandler)
 	})
 
 	// Session Protected routes:
 	router.Group(func(r chi.Router) {
+		// Session middleware
 		r.Use(SetSessionMiddleware)
+		// Session
 		r.Get("/session", protectedSessionHandler)
+		// Logout
+		r.Post("/logout", logoutHandler)
 	})
 
 	return router

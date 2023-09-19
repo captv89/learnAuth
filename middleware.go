@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"log"
 	"net/http"
 	"time"
 )
@@ -9,7 +10,8 @@ import (
 // SetDBMiddleware function to set the database middleware
 func SetDBMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		timeoutContext, _ := context.WithTimeout(context.Background(), time.Second)
+		timeoutContext, cancel := context.WithTimeout(context.Background(), time.Second)
+		defer cancel()
 		ctx := context.WithValue(r.Context(), "DB", db.WithContext(timeoutContext))
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
@@ -30,6 +32,7 @@ func SetSessionMiddleware(next http.Handler) http.Handler {
 		session := &Session{}
 		err = db.Where("session_id = ?", sessionID.Value).First(&session).Error
 		if err != nil {
+			log.Println("Info: ", err)
 			// Send error back to client
 			w.WriteHeader(http.StatusUnauthorized)
 			return
@@ -37,6 +40,7 @@ func SetSessionMiddleware(next http.Handler) http.Handler {
 
 		// Check if session is expired
 		if session.Expiry.Before(time.Now()) {
+			log.Println("Info: Session expired")
 			// Send error back to client
 			w.WriteHeader(http.StatusUnauthorized)
 			return
